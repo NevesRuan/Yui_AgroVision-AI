@@ -11,6 +11,7 @@ from fastapi.templating import Jinja2Templates
 
 from services.config import AGENT_EVENT_LIMIT
 from services.event_repository import init_db, list_events
+from services import ollama_client
 from services.video_monitor import VideoMonitor
 
 logging.basicConfig(
@@ -30,6 +31,7 @@ monitor = VideoMonitor()
 async def on_startup() -> None:
     init_db()
     monitor.start()
+    asyncio.create_task(ollama_client.warmup())
     logger.info("AgroVision AI pronto")
 
 
@@ -45,8 +47,9 @@ async def index(request: Request) -> HTMLResponse:
 
 @app.get("/health")
 async def health() -> JSONResponse:
+    available = await ollama_client.is_available()
     return JSONResponse(
-        {"status": "ok", "service": "AgroVision AI", "ollama_available": False}
+        {"status": "ok", "service": "AgroVision AI", "ollama_available": available}
     )
 
 
