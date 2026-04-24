@@ -157,6 +157,14 @@ ENV/
 env.bak/
 venv.bak/
 
+# AgroVision runtime artifacts
+detections.db
+static/captures/*
+!static/captures/.gitkeep
+runs/
+yolov8n.pt
+*.pt
+
 # Spyder project settings
 .spyderproject
 .spyproject
