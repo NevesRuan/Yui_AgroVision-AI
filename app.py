@@ -2,17 +2,24 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 
-from fastapi import FastAPI, Request, Response
+import httpx
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from services.config import AGENT_EVENT_LIMIT
 from services.event_repository import init_db, list_events
-from services.monitoring_agent import AGENT_PROFILE, build_event_context
+from services.monitoring_agent import (
+    AGENT_PROFILE,
+    build_agent_messages,
+    build_event_context,
+)
 from services import ollama_client
+from services.schemas import ChatRequest, ChatResponse
 from services.video_monitor import VideoMonitor
 
 logging.basicConfig(
@@ -101,3 +108,41 @@ async def video_feed() -> StreamingResponse:
         _mjpeg_generator(),
         media_type="multipart/x-mixed-replace; boundary=frame",
     )
+
+
+def _wants_stream(request: Request) -> bool:
+    if request.query_params.get("stream") in {"1", "true"}:
+        return True
+    accept = request.headers.get("accept", "")
+    return "application/x-ndjson" in accept
+
+
+@app.post("/chat")
+async def chat(request: Request, payload: ChatRequest):
+    events = list_events(AGENT_EVENT_LIMIT)
+    messages = build_agent_messages(payload.question, payload.history, events)
+
+    if not _wants_stream(request):
+        try:
+            answer = await ollama_client.chat(messages)
+        except httpx.HTTPError as exc:
+            logger.warning("Falha na chamada ao Ollama: %s", exc)
+            raise HTTPException(
+                status_code=503,
+                detail="Ollama indisponivel. Verifique se 'ollama serve' esta rodando.",
+            ) from exc
+        return ChatResponse(answer=answer)
+
+    async def event_stream():
+        try:
+            async for chunk in ollama_client.chat_stream(messages):
+                yield json.dumps({"chunk": chunk}, ensure_ascii=False) + "\n"
+            yield json.dumps({"done": True}) + "\n"
+        except httpx.HTTPError as exc:
+            logger.warning("Falha no streaming do Ollama: %s", exc)
+            yield json.dumps(
+                {"error": "Ollama indisponivel no momento.", "done": True},
+                ensure_ascii=False,
+            ) + "\n"
+
+    return StreamingResponse(event_stream(), media_type="application/x-ndjson")
