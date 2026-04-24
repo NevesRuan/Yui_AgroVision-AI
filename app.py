@@ -11,7 +11,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from services.config import AGENT_EVENT_LIMIT
+from services.config import AGENT_EVENT_LIMIT, DEBUG
 from services.event_repository import init_db, list_events
 from services.monitoring_agent import (
     AGENT_PROFILE,
@@ -23,7 +23,7 @@ from services.schemas import ChatRequest, ChatResponse
 from services.video_monitor import VideoMonitor
 
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG if DEBUG else logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
 logger = logging.getLogger("agrovision")
