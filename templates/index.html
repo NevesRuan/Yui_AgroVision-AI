@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AgroVision AI - Monitoramento Operacional</title>
+  <link rel="stylesheet" href="/static/dashboard.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo-dot"></span>
+      <h1>AgroVision AI</h1>
+    </div>
+    <div class="status-group">
+      <div class="status-pill" id="camera-status">
+        <span class="dot" data-state="unknown"></span>
+        <span class="label">Camera</span>
+      </div>
+      <div class="status-pill" id="ollama-status">
+        <span class="dot" data-state="unknown"></span>
+        <span class="label">Agente</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="video-panel">
+      <div class="video-wrapper">
+        <img id="video-feed" src="/video_feed" alt="Transmissao em tempo real" />
+        <div class="video-overlay" id="video-overlay" hidden>
+          <p>Camera offline - tentando reconectar...</p>
+        </div>
+      </div>
+      <h2>Eventos recentes</h2>
+      <ul id="events-list" class="events-list">
+        <li class="events-empty">Aguardando deteccoes...</li>
+      </ul>
+    </section>
+
+    <section class="chat-panel">
+      <div class="chat-header">
+        <h2>Agente de triagem</h2>
+        <p class="chat-subtitle" id="agent-goal">Analisa deteccoes e sugere a proxima acao.</p>
+      </div>
+      <div class="quick-prompts">
+        <button data-prompt="Liste os eventos mais recentes que voce ve no contexto.">Ultimos eventos</button>
+        <button data-prompt="Quais padroes voce identifica nas deteccoes recentes?">Padroes</button>
+        <button data-prompt="Avalie o risco atual com base nas deteccoes.">Risco</button>
+        <button data-prompt="Qual a proxima acao humana recomendada?">Proxima acao</button>
+      </div>
+      <div id="chat-messages" class="chat-messages">
+        <div class="chat-msg assistant">
+          <div class="bubble">Ola. Pergunte sobre o estado operacional atual.</div>
+        </div>
+      </div>
+      <form id="chat-form" class="chat-form">
+        <input
+          type="text"
+          id="chat-input"
+          placeholder="Pergunte ao agente..."
+          autocomplete="off"
+          required
+        />
+        <button type="submit" id="chat-send">Enviar</button>
+      </form>
+    </section>
+  </main>
+
+  <script src="/static/dashboard.js" defer></script>
+</body>
+</html>
