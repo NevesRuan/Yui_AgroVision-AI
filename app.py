@@ -1,10 +1,11 @@
 """AgroVision AI - rotas FastAPI e orquestracao de services."""
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from fastapi import FastAPI, Request, Response
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -60,3 +61,20 @@ async def frame() -> Response:
     if data is None:
         return Response(status_code=503, content="Nenhum frame disponivel")
     return Response(content=data, media_type="image/jpeg")
+
+
+async def _mjpeg_generator():
+    boundary = b"--frame\r\n"
+    while True:
+        data = monitor.get_last_frame()
+        if data is not None:
+            yield boundary + b"Content-Type: image/jpeg\r\n\r\n" + data + b"\r\n"
+        await asyncio.sleep(0.05)
+
+
+@app.get("/video_feed")
+async def video_feed() -> StreamingResponse:
+    return StreamingResponse(
+        _mjpeg_generator(),
+        media_type="multipart/x-mixed-replace; boundary=frame",
+    )
