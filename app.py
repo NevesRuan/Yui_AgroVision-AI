@@ -55,6 +55,11 @@ async def events() -> JSONResponse:
     return JSONResponse(list_events(AGENT_EVENT_LIMIT))
 
 
+@app.get("/camera/status")
+async def camera_status() -> JSONResponse:
+    return JSONResponse(monitor.get_status())
+
+
 @app.get("/frame")
 async def frame() -> Response:
     data = monitor.get_last_frame()
