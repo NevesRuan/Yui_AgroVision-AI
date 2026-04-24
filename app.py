@@ -11,6 +11,7 @@ from fastapi.templating import Jinja2Templates
 
 from services.config import AGENT_EVENT_LIMIT
 from services.event_repository import init_db, list_events
+from services.monitoring_agent import AGENT_PROFILE, build_event_context
 from services import ollama_client
 from services.video_monitor import VideoMonitor
 
@@ -61,6 +62,20 @@ async def events() -> JSONResponse:
 @app.get("/camera/status")
 async def camera_status() -> JSONResponse:
     return JSONResponse(monitor.get_status())
+
+
+@app.get("/agent/status")
+async def agent_status() -> JSONResponse:
+    events = list_events(AGENT_EVENT_LIMIT)
+    return JSONResponse(
+        {
+            "name": AGENT_PROFILE.name,
+            "role": AGENT_PROFILE.role,
+            "goal": AGENT_PROFILE.goal,
+            "events_in_context": len(events),
+            "context_preview": build_event_context(events),
+        }
+    )
 
 
 @app.get("/frame")
