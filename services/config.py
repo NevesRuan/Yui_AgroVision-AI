@@ -78,5 +78,12 @@ BASE_DIR: Path = Path(__file__).resolve().parent.parent
 DB_PATH: str = _get_str("DB_PATH", str(BASE_DIR / "detections.db"))
 SAVE_DIR: str = _get_str("SAVE_DIR", str(BASE_DIR / "static" / "captures"))
 
+# --- Web scraping: clima ---
+WEATHER_ENABLED: bool = _get_str("WEATHER_ENABLED", "1").strip() not in {"0", "", "false", "False"}
+WEATHER_LATITUDE: float = _get_float("WEATHER_LATITUDE", 32.55)
+WEATHER_LONGITUDE: float = _get_float("WEATHER_LONGITUDE", -117.04)
+WEATHER_CACHE_TTL_SECONDS: int = _get_int("WEATHER_CACHE_TTL_SECONDS", 600)
+WEATHER_REQUEST_TIMEOUT: int = _get_int("WEATHER_REQUEST_TIMEOUT", 5)
+
 # --- Debug ---
 DEBUG: bool = _get_str("DEBUG", "0").strip() not in {"0", "", "false", "False"}
