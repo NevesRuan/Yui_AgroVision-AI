@@ -17,6 +17,10 @@ from services.config import (
 logger = logging.getLogger(__name__)
 
 
+class OllamaUnavailableError(RuntimeError):
+    """Falha de comunicacao com o Ollama (timeout, conexao recusada, etc)."""
+
+
 def _tags_url() -> str:
     base = OLLAMA_URL.rsplit("/api/", 1)[0]
     return f"{base}/api/tags"
@@ -42,12 +46,14 @@ async def is_available() -> bool:
 
 
 async def chat(messages: list[dict]) -> str:
-    """Chamada nao-streaming. Levanta httpx.HTTPError em falhas."""
     payload = _base_payload(messages, stream=False)
-    async with httpx.AsyncClient(timeout=OLLAMA_TIMEOUT) as client:
-        r = await client.post(OLLAMA_URL, json=payload)
-        r.raise_for_status()
-        data = r.json()
+    try:
+        async with httpx.AsyncClient(timeout=OLLAMA_TIMEOUT) as client:
+            r = await client.post(OLLAMA_URL, json=payload)
+            r.raise_for_status()
+            data = r.json()
+    except httpx.HTTPError as exc:
+        raise OllamaUnavailableError(str(exc)) from exc
     message = data.get("message", {}) or {}
     return str(message.get("content", ""))
 
@@ -55,21 +61,24 @@ async def chat(messages: list[dict]) -> str:
 async def chat_stream(messages: list[dict]) -> AsyncIterator[str]:
     """Streaming NDJSON: produz cada chunk de texto conforme chega."""
     payload = _base_payload(messages, stream=True)
-    async with httpx.AsyncClient(timeout=OLLAMA_TIMEOUT) as client:
-        async with client.stream("POST", OLLAMA_URL, json=payload) as r:
-            r.raise_for_status()
-            async for line in r.aiter_lines():
-                if not line:
-                    continue
-                try:
-                    obj = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                chunk = (obj.get("message") or {}).get("content", "")
-                if chunk:
-                    yield chunk
-                if obj.get("done"):
-                    break
+    try:
+        async with httpx.AsyncClient(timeout=OLLAMA_TIMEOUT) as client:
+            async with client.stream("POST", OLLAMA_URL, json=payload) as r:
+                r.raise_for_status()
+                async for line in r.aiter_lines():
+                    if not line:
+                        continue
+                    try:
+                        obj = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    chunk = (obj.get("message") or {}).get("content", "")
+                    if chunk:
+                        yield chunk
+                    if obj.get("done"):
+                        break
+    except httpx.HTTPError as exc:
+        raise OllamaUnavailableError(str(exc)) from exc
 
 
 async def warmup() -> None:
