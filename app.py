@@ -5,7 +5,6 @@ import asyncio
 import json
 import logging
 
-import httpx
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -19,6 +18,7 @@ from services.monitoring_agent import (
     build_event_context,
 )
 from services import ollama_client
+from services.ollama_client import OllamaUnavailableError
 from services.schemas import ChatRequest, ChatResponse
 from services.video_monitor import VideoMonitor
 
@@ -125,11 +125,11 @@ async def chat(request: Request, payload: ChatRequest):
     if not _wants_stream(request):
         try:
             answer = await ollama_client.chat(messages)
-        except httpx.HTTPError as exc:
+        except OllamaUnavailableError as exc:
             logger.warning("Falha na chamada ao Ollama: %s", exc)
             raise HTTPException(
                 status_code=503,
-                detail="Ollama indisponivel. Verifique se 'ollama serve' esta rodando.",
+                detail="Servico de IA temporariamente indisponivel",
             ) from exc
         return ChatResponse(answer=answer)
 
@@ -138,7 +138,7 @@ async def chat(request: Request, payload: ChatRequest):
             async for chunk in ollama_client.chat_stream(messages):
                 yield json.dumps({"chunk": chunk}, ensure_ascii=False) + "\n"
             yield json.dumps({"done": True}) + "\n"
-        except httpx.HTTPError as exc:
+        except OllamaUnavailableError as exc:
             logger.warning("Falha no streaming do Ollama: %s", exc)
             yield json.dumps(
                 {"error": "Ollama indisponivel no momento.", "done": True},
