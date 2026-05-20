@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
@@ -28,24 +29,27 @@ logging.basicConfig(
 )
 logger = logging.getLogger("agrovision")
 
-app = FastAPI(title="AgroVision AI")
-app.mount("/static", StaticFiles(directory="static"), name="static")
-templates = Jinja2Templates(directory="templates")
-
 monitor = VideoMonitor()
 
 
-@app.on_event("startup")
-async def on_startup() -> None:
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     init_db()
     monitor.start()
-    asyncio.create_task(ollama_client.warmup())
+    warmup_task = asyncio.create_task(ollama_client.warmup())
+    app.state.warmup_task = warmup_task
     logger.info("AgroVision AI pronto")
+    try:
+        yield
+    finally:
+        monitor.stop()
+        if not warmup_task.done():
+            warmup_task.cancel()
 
 
-@app.on_event("shutdown")
-async def on_shutdown() -> None:
-    monitor.stop()
+app = FastAPI(title="AgroVision AI", lifespan=lifespan)
+app.mount("/static", StaticFiles(directory="static"), name="static")
+templates = Jinja2Templates(directory="templates")
 
 
 @app.get("/", response_class=HTMLResponse)
