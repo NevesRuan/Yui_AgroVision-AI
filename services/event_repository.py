@@ -36,6 +36,26 @@ def init_db() -> None:
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_events_ts ON events(timestamp DESC)"
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS weather_snapshots (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                fetched_at TEXT NOT NULL,
+                latitude REAL NOT NULL,
+                longitude REAL NOT NULL,
+                temperature_c REAL,
+                humidity_pct INTEGER,
+                precipitation_mm REAL,
+                wind_kmh REAL,
+                condition_code INTEGER,
+                condition_label TEXT,
+                is_day INTEGER
+            )
+            """
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_weather_fetched ON weather_snapshots(fetched_at DESC)"
+        )
 
 
 def save_event(label: str, confidence: float, image_path: str | None = None) -> int:
@@ -63,3 +83,28 @@ def count_events() -> int:
     with _connect() as conn:
         row = conn.execute("SELECT COUNT(*) AS total FROM events").fetchone()
     return int(row["total"]) if row else 0
+
+
+def save_weather_snapshot(snapshot: dict) -> int:
+    """Persiste um snapshot de clima; ignora chaves fora da tabela (ex: is_stale)."""
+    is_day = snapshot.get("is_day")
+    with _connect() as conn:
+        cur = conn.execute(
+            "INSERT INTO weather_snapshots ("
+            "fetched_at, latitude, longitude, temperature_c, humidity_pct, "
+            "precipitation_mm, wind_kmh, condition_code, condition_label, is_day"
+            ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                snapshot.get("fetched_at"),
+                snapshot.get("latitude"),
+                snapshot.get("longitude"),
+                snapshot.get("temperature_c"),
+                snapshot.get("humidity_pct"),
+                snapshot.get("precipitation_mm"),
+                snapshot.get("wind_kmh"),
+                snapshot.get("condition_code"),
+                snapshot.get("condition_label"),
+                int(is_day) if is_day is not None else None,
+            ),
+        )
+        return int(cur.lastrowid)
