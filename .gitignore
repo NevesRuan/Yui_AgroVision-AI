@@ -224,3 +224,8 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Docs internos (nao versionados)
+CLAUDE.md
+TASKS.md
+RELATORIO.md
