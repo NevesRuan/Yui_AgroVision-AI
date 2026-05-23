@@ -93,14 +93,14 @@ async def weather() -> JSONResponse:
 
 @app.get("/agent/status")
 async def agent_status() -> JSONResponse:
-    events = list_events(AGENT_EVENT_LIMIT)
+    recent_events = list_events(AGENT_EVENT_LIMIT)
     return JSONResponse(
         {
             "name": AGENT_PROFILE.name,
             "role": AGENT_PROFILE.role,
             "goal": AGENT_PROFILE.goal,
-            "events_in_context": len(events),
-            "context_preview": build_event_context(events),
+            "events_in_context": len(recent_events),
+            "context_preview": build_event_context(recent_events),
         }
     )
 
@@ -140,13 +140,13 @@ def _wants_stream(request: Request) -> bool:
 @app.post("/chat")
 @limiter.limit("10/minute")
 async def chat(request: Request, payload: ChatRequest):
-    events = list_events(AGENT_EVENT_LIMIT)
+    recent_events = list_events(AGENT_EVENT_LIMIT)
     weather_dict = None
     if WEATHER_ENABLED:
         snap = await weather_scraper.get_current()
         if snap is not None:
             weather_dict = snap.to_dict()
-    messages = build_agent_messages(payload.question, payload.history, events, weather_dict)
+    messages = build_agent_messages(payload.question, payload.history, recent_events, weather_dict)
 
     if not _wants_stream(request):
         try:
