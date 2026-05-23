@@ -85,5 +85,10 @@ WEATHER_LONGITUDE: float = _get_float("WEATHER_LONGITUDE", -117.04)
 WEATHER_CACHE_TTL_SECONDS: int = _get_int("WEATHER_CACHE_TTL_SECONDS", 600)
 WEATHER_REQUEST_TIMEOUT: int = _get_int("WEATHER_REQUEST_TIMEOUT", 5)
 
+# --- Limites HTTP ---
+# Teto de tamanho do corpo da requisicao. Acomoda o ChatRequest maximo (~84 KB:
+# 20 mensagens de 4000 chars + pergunta de 2000) com folga e barra corpos abusivos.
+MAX_REQUEST_BODY_BYTES: int = _get_int("MAX_REQUEST_BODY_BYTES", 262144)
+
 # --- Debug ---
 DEBUG: bool = _get_str("DEBUG", "0").strip() not in {"0", "", "false", "False"}

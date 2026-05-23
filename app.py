@@ -12,7 +12,12 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
-from services.config import AGENT_EVENT_LIMIT, DEBUG, WEATHER_ENABLED
+from services.config import (
+    AGENT_EVENT_LIMIT,
+    DEBUG,
+    MAX_REQUEST_BODY_BYTES,
+    WEATHER_ENABLED,
+)
 from services.event_repository import init_db, list_events
 from services.monitoring_agent import (
     AGENT_PROFILE,
@@ -73,6 +78,23 @@ templates = Jinja2Templates(directory="templates")
 limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+
+@app.middleware("http")
+async def limit_body_size(request: Request, call_next):
+    # Rejeita corpos grandes pelo Content-Length, antes de ler na memoria. Corta o
+    # DoS de memoria e o bypass do rate limit via corpos invalidos volumosos.
+    content_length = request.headers.get("content-length")
+    if content_length is not None:
+        try:
+            declared = int(content_length)
+        except ValueError:
+            return JSONResponse({"detail": "Content-Length invalido"}, status_code=400)
+        if declared > MAX_REQUEST_BODY_BYTES:
+            return JSONResponse(
+                {"detail": "Corpo da requisicao muito grande"}, status_code=413
+            )
+    return await call_next(request)
 
 
 @app.get("/", response_class=HTMLResponse)
