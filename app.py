@@ -34,19 +34,36 @@ logger = logging.getLogger("agrovision")
 monitor = VideoMonitor()
 
 
+async def _persist_weather_loop():
+    from services.event_repository import save_weather_snapshot
+    while True:
+        try:
+            if WEATHER_ENABLED:
+                snap = await weather_scraper.get_current()
+                if snap is not None and not snap.is_stale:
+                    save_weather_snapshot(snap.to_dict())
+                    logger.debug("Snapshot de clima persistido")
+        except Exception as exc:
+            logger.warning("Falha ao persistir clima: %s", exc)
+        await asyncio.sleep(3600)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
     monitor.start()
     warmup_task = asyncio.create_task(ollama_client.warmup())
     app.state.warmup_task = warmup_task
+    weather_task = asyncio.create_task(_persist_weather_loop())
+    app.state.weather_task = weather_task
     logger.info("AgroVision AI pronto")
     try:
         yield
     finally:
         monitor.stop()
-        if not warmup_task.done():
-            warmup_task.cancel()
+        for task in (warmup_task, weather_task):
+            if not task.done():
+                task.cancel()
 
 
 app = FastAPI(title="AgroVision AI", lifespan=lifespan)
