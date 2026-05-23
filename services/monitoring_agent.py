@@ -80,7 +80,14 @@ def build_event_context(events: list[dict], weather: dict | None = None) -> str:
 
     if weather:
         lines.append("- Condicoes externas:")
-        lines.append(f"  - Temperatura: {weather.get('temperature_c'):.1f} C, umidade {weather.get('humidity_pct')}%")
+        temp = weather.get("temperature_c")
+        humidity = weather.get("humidity_pct")
+        if temp is not None:
+            temp_txt = f"{temp:.1f} C"
+        else:
+            temp_txt = "indisponivel"
+        humidity_txt = f"{humidity}%" if humidity is not None else "indisponivel"
+        lines.append(f"  - Temperatura: {temp_txt}, umidade {humidity_txt}")
         precip = weather.get("precipitation_mm")
         if precip is not None:
             lines.append(f"  - Precipitacao: {precip:.1f} mm/h")

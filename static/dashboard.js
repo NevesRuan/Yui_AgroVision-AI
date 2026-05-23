@@ -130,8 +130,10 @@
         return;
       }
       document.getElementById("weather-card").hidden = false;
-      document.getElementById("weather-temp").textContent = `${data.temperature_c.toFixed(1)} °C`;
-      document.getElementById("weather-humidity").textContent = `${data.humidity_pct}%`;
+      document.getElementById("weather-temp").textContent =
+        data.temperature_c != null ? `${data.temperature_c.toFixed(1)} °C` : "—";
+      document.getElementById("weather-humidity").textContent =
+        data.humidity_pct != null ? `${data.humidity_pct}%` : "—";
       document.getElementById("weather-precip").textContent =
         data.precipitation_mm != null ? `${data.precipitation_mm.toFixed(1)} mm/h` : "—";
       document.getElementById("weather-wind").textContent =
