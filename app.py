@@ -11,7 +11,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from services.config import AGENT_EVENT_LIMIT, DEBUG
+from services.config import AGENT_EVENT_LIMIT, DEBUG, WEATHER_ENABLED
 from services.event_repository import init_db, list_events
 from services.monitoring_agent import (
     AGENT_PROFILE,
@@ -19,6 +19,7 @@ from services.monitoring_agent import (
     build_event_context,
 )
 from services import ollama_client
+from services import weather_scraper
 from services.ollama_client import OllamaUnavailableError
 from services.schemas import ChatRequest, ChatResponse
 from services.video_monitor import VideoMonitor
@@ -75,6 +76,16 @@ async def camera_status() -> JSONResponse:
     return JSONResponse(monitor.get_status())
 
 
+@app.get("/weather")
+async def weather() -> JSONResponse:
+    if not WEATHER_ENABLED:
+        return JSONResponse({"enabled": False}, status_code=200)
+    snap = await weather_scraper.get_current()
+    if snap is None:
+        return JSONResponse({"enabled": True, "available": False}, status_code=503)
+    return JSONResponse({"enabled": True, "available": True, **snap.to_dict()})
+
+
 @app.get("/agent/status")
 async def agent_status() -> JSONResponse:
     events = list_events(AGENT_EVENT_LIMIT)
@@ -124,7 +135,12 @@ def _wants_stream(request: Request) -> bool:
 @app.post("/chat")
 async def chat(request: Request, payload: ChatRequest):
     events = list_events(AGENT_EVENT_LIMIT)
-    messages = build_agent_messages(payload.question, payload.history, events)
+    weather_dict = None
+    if WEATHER_ENABLED:
+        snap = await weather_scraper.get_current()
+        if snap is not None:
+            weather_dict = snap.to_dict()
+    messages = build_agent_messages(payload.question, payload.history, events, weather_dict)
 
     if not _wants_stream(request):
         try:
