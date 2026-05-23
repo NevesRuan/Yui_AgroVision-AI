@@ -11,8 +11,12 @@ from services.config import DB_PATH
 
 @contextmanager
 def _connect() -> Iterator[sqlite3.Connection]:
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=5.0)
     conn.row_factory = sqlite3.Row
+    # WAL permite leitura concorrente com escrita; busy_timeout evita "database is
+    # locked" quando a thread do video, a task de clima e as rotas concorrem.
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=5000")
     try:
         yield conn
         conn.commit()
