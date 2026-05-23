@@ -120,6 +120,29 @@
     }[c]));
   }
 
+  async function refreshWeather() {
+    try {
+      const r = await fetch("/weather");
+      if (!r.ok) return;
+      const data = await r.json();
+      if (!data.enabled || !data.available) {
+        document.getElementById("weather-card").hidden = true;
+        return;
+      }
+      document.getElementById("weather-card").hidden = false;
+      document.getElementById("weather-temp").textContent = `${data.temperature_c.toFixed(1)} °C`;
+      document.getElementById("weather-humidity").textContent = `${data.humidity_pct}%`;
+      document.getElementById("weather-precip").textContent =
+        data.precipitation_mm != null ? `${data.precipitation_mm.toFixed(1)} mm/h` : "—";
+      document.getElementById("weather-wind").textContent =
+        data.wind_kmh != null ? `${data.wind_kmh.toFixed(1)} km/h` : "—";
+      document.getElementById("weather-condition").textContent = data.condition_label || "—";
+      document.getElementById("weather-stale").hidden = !data.is_stale;
+    } catch {
+      /* silencioso, proxima volta tenta de novo */
+    }
+  }
+
   // ---------- Chat ----------
 
   async function sendMessage(question) {
@@ -217,7 +240,9 @@
   refreshCameraStatus();
   refreshHealth();
   refreshEvents();
+  refreshWeather();
   setInterval(refreshCameraStatus, 5000);
   setInterval(refreshEvents, 5000);
   setInterval(refreshHealth, 15000);
+  setInterval(refreshWeather, 5 * 60 * 1000);  // 5 minutos
 })();
