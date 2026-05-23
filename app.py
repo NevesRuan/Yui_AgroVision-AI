@@ -1,6 +1,4 @@
 """AgroVision AI - rotas FastAPI e orquestracao de services."""
-from __future__ import annotations
-
 import asyncio
 import json
 import logging
@@ -10,6 +8,9 @@ from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 from services.config import AGENT_EVENT_LIMIT, DEBUG, WEATHER_ENABLED
 from services.event_repository import init_db, list_events
@@ -51,6 +52,10 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="AgroVision AI", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
+
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -133,6 +138,7 @@ def _wants_stream(request: Request) -> bool:
 
 
 @app.post("/chat")
+@limiter.limit("10/minute")
 async def chat(request: Request, payload: ChatRequest):
     events = list_events(AGENT_EVENT_LIMIT)
     weather_dict = None
