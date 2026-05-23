@@ -46,16 +46,15 @@ async def is_available() -> bool:
 
 
 async def chat(messages: list[dict]) -> str:
-    payload = _base_payload(messages, stream=False)
-    try:
-        async with httpx.AsyncClient(timeout=OLLAMA_TIMEOUT) as client:
-            r = await client.post(OLLAMA_URL, json=payload)
-            r.raise_for_status()
-            data = r.json()
-    except httpx.HTTPError as exc:
-        raise OllamaUnavailableError(str(exc)) from exc
-    message = data.get("message", {}) or {}
-    return str(message.get("content", ""))
+    """Resposta completa, acumulada via streaming interno.
+
+    Consumir o streaming faz o OLLAMA_TIMEOUT valer por chunk (intervalo entre tokens)
+    em vez de pela geracao inteira; evita ReadTimeout em geracao lenta (CPU-only).
+    """
+    parts: list[str] = []
+    async for chunk in chat_stream(messages):
+        parts.append(chunk)
+    return "".join(parts)
 
 
 async def chat_stream(messages: list[dict]) -> AsyncIterator[str]:

@@ -46,7 +46,7 @@ def _get_camera_source(raw: str) -> str | int:
 # --- Ollama ---
 OLLAMA_URL: str = _get_str("OLLAMA_URL", "http://127.0.0.1:11434/api/chat")
 OLLAMA_MODEL: str = _get_str("OLLAMA_MODEL", "llama3")
-OLLAMA_TIMEOUT: int = _get_int("OLLAMA_TIMEOUT", 120)
+OLLAMA_TIMEOUT: int = _get_int("OLLAMA_TIMEOUT", 300)
 OLLAMA_KEEP_ALIVE: str = _get_str("OLLAMA_KEEP_ALIVE", "30m")
 
 # --- Agente ---
