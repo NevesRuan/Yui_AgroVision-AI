@@ -50,30 +50,55 @@ def build_system_prompt() -> str:
     )
 
 
-def build_event_context(events: list[dict]) -> str:
+def build_event_context(events: list[dict], weather: dict | None = None) -> str:
     if not events:
-        return "Contexto operacional para o agente:\nNenhum evento recente disponivel."
+        lines = [
+            "Contexto operacional para o agente:",
+            "Nenhum evento recente disponivel.",
+        ]
+    else:
+        latest = events[0]
+        labels = [e.get("label", "?") for e in events]
+        label_counts = Counter(labels)
+        distribution = ", ".join(f"{k}: {v}" for k, v in label_counts.most_common())
+        confidences = [float(e.get("confidence", 0.0)) for e in events]
+        avg_conf = sum(confidences) / len(confidences) if confidences else 0.0
 
-    latest = events[0]
-    labels = [e.get("label", "?") for e in events]
-    label_counts = Counter(labels)
-    distribution = ", ".join(f"{k}: {v}" for k, v in label_counts.most_common())
-    confidences = [float(e.get("confidence", 0.0)) for e in events]
-    avg_conf = sum(confidences) / len(confidences) if confidences else 0.0
+        lines = [
+            "Contexto operacional para o agente:",
+            f"- Eventos recentes no banco: {len(events)}",
+            f"- Evento mais recente: {latest.get('label', '?')} em {latest.get('timestamp', '?')}",
+            f"- Distribuicao por classe: {distribution}",
+            f"- Confianca media: {avg_conf:.2f}",
+            "- Lista resumida:",
+        ]
+        for e in events:
+            lines.append(
+                f"  #{e.get('id', '?')} | {e.get('label', '?')} | "
+                f"{float(e.get('confidence', 0.0)):.2f} | {e.get('timestamp', '?')}"
+            )
 
-    lines = [
-        "Contexto operacional para o agente:",
-        f"- Eventos recentes no banco: {len(events)}",
-        f"- Evento mais recente: {latest.get('label', '?')} em {latest.get('timestamp', '?')}",
-        f"- Distribuicao por classe: {distribution}",
-        f"- Confianca media: {avg_conf:.2f}",
-        "- Lista resumida:",
-    ]
-    for e in events:
-        lines.append(
-            f"  #{e.get('id', '?')} | {e.get('label', '?')} | "
-            f"{float(e.get('confidence', 0.0)):.2f} | {e.get('timestamp', '?')}"
-        )
+    if weather:
+        lines.append("- Condicoes externas:")
+        temp = weather.get("temperature_c")
+        humidity = weather.get("humidity_pct")
+        if temp is not None:
+            temp_txt = f"{temp:.1f} C"
+        else:
+            temp_txt = "indisponivel"
+        humidity_txt = f"{humidity}%" if humidity is not None else "indisponivel"
+        lines.append(f"  - Temperatura: {temp_txt}, umidade {humidity_txt}")
+        precip = weather.get("precipitation_mm")
+        if precip is not None:
+            lines.append(f"  - Precipitacao: {precip:.1f} mm/h")
+        wind = weather.get("wind_kmh")
+        if wind is not None:
+            lines.append(f"  - Vento: {wind:.1f} km/h")
+        label = weather.get("condition_label")
+        if label:
+            lines.append(f"  - Condicao: {label}")
+        if weather.get("is_stale"):
+            lines.append("  - (aviso: dados climaticos podem estar desatualizados)")
     return "\n".join(lines)
 
 
@@ -96,11 +121,14 @@ def normalize_history(history: Iterable) -> list[dict]:
 
 
 def build_agent_messages(
-    question: str, history: Iterable, events: list[dict]
+    question: str,
+    history: Iterable,
+    events: list[dict],
+    weather: dict | None = None,
 ) -> list[dict]:
     return [
         {"role": "system", "content": build_system_prompt()},
-        {"role": "system", "content": build_event_context(events)},
+        {"role": "system", "content": build_event_context(events, weather)},
         *normalize_history(history),
         {"role": "user", "content": question},
     ]

@@ -46,7 +46,7 @@ def _get_camera_source(raw: str) -> str | int:
 # --- Ollama ---
 OLLAMA_URL: str = _get_str("OLLAMA_URL", "http://127.0.0.1:11434/api/chat")
 OLLAMA_MODEL: str = _get_str("OLLAMA_MODEL", "llama3")
-OLLAMA_TIMEOUT: int = _get_int("OLLAMA_TIMEOUT", 120)
+OLLAMA_TIMEOUT: int = _get_int("OLLAMA_TIMEOUT", 300)
 OLLAMA_KEEP_ALIVE: str = _get_str("OLLAMA_KEEP_ALIVE", "30m")
 
 # --- Agente ---
@@ -77,6 +77,18 @@ ALERT_COOLDOWN_SECONDS: int = _get_int("ALERT_COOLDOWN_SECONDS", 15)
 BASE_DIR: Path = Path(__file__).resolve().parent.parent
 DB_PATH: str = _get_str("DB_PATH", str(BASE_DIR / "detections.db"))
 SAVE_DIR: str = _get_str("SAVE_DIR", str(BASE_DIR / "static" / "captures"))
+
+# --- Web scraping: clima ---
+WEATHER_ENABLED: bool = _get_str("WEATHER_ENABLED", "1").strip() not in {"0", "", "false", "False"}
+WEATHER_LATITUDE: float = _get_float("WEATHER_LATITUDE", 32.55)
+WEATHER_LONGITUDE: float = _get_float("WEATHER_LONGITUDE", -117.04)
+WEATHER_CACHE_TTL_SECONDS: int = _get_int("WEATHER_CACHE_TTL_SECONDS", 600)
+WEATHER_REQUEST_TIMEOUT: int = _get_int("WEATHER_REQUEST_TIMEOUT", 5)
+
+# --- Limites HTTP ---
+# Teto de tamanho do corpo da requisicao. Acomoda o ChatRequest maximo (~84 KB:
+# 20 mensagens de 4000 chars + pergunta de 2000) com folga e barra corpos abusivos.
+MAX_REQUEST_BODY_BYTES: int = _get_int("MAX_REQUEST_BODY_BYTES", 262144)
 
 # --- Debug ---
 DEBUG: bool = _get_str("DEBUG", "0").strip() not in {"0", "", "false", "False"}

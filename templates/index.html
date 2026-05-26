@@ -25,6 +25,17 @@
   </header>
 
   <main class="layout">
+    <aside class="weather-card" id="weather-card" hidden>
+      <h3>Condicoes externas</h3>
+      <div class="weather-grid">
+        <div><span class="weather-label">Temperatura</span><span id="weather-temp">—</span></div>
+        <div><span class="weather-label">Umidade</span><span id="weather-humidity">—</span></div>
+        <div><span class="weather-label">Chuva</span><span id="weather-precip">—</span></div>
+        <div><span class="weather-label">Vento</span><span id="weather-wind">—</span></div>
+      </div>
+      <p class="weather-condition" id="weather-condition">—</p>
+      <p class="weather-stale" id="weather-stale" hidden>Dados podem estar desatualizados</p>
+    </aside>
     <section class="video-panel">
       <div class="video-wrapper">
         <img id="video-feed" src="/video_feed" alt="Transmissao em tempo real" />

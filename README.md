@@ -54,6 +54,11 @@ Dashboard em `http://127.0.0.1:8000/`.
 | `OLLAMA_MODEL` | `llama3` | Modelo LLM |
 | `CAMERA_SOURCE` | URL Caltrans | Webcam (int), stream HLS/RTSP ou arquivo |
 | `AGENT_EVENT_LIMIT` | `12` | Quantos eventos o agente ve por chamada |
+| `WEATHER_ENABLED` | `1` | Liga/desliga o scraping de clima (`0` desativa) |
+| `WEATHER_LATITUDE` | `32.55` | Latitude consultada no Open-Meteo |
+| `WEATHER_LONGITUDE` | `-117.04` | Longitude consultada no Open-Meteo |
+| `WEATHER_CACHE_TTL_SECONDS` | `600` | TTL do cache em memoria do clima |
+| `WEATHER_REQUEST_TIMEOUT` | `5` | Timeout (s) da requisicao ao Open-Meteo |
 
 ## Rotas HTTP
 
@@ -62,6 +67,7 @@ Dashboard em `http://127.0.0.1:8000/`.
 | GET | `/` | Dashboard |
 | GET | `/health` | Status + `ollama_available` |
 | GET | `/camera/status` | Estado da captura |
+| GET | `/weather` | Condicoes externas (Open-Meteo) via web scraping |
 | GET | `/agent/status` | Preview do contexto enviado ao LLM |
 | GET | `/events` | Ultimas deteccoes |
 | GET | `/frame` | Snapshot JPEG atual |
@@ -74,6 +80,14 @@ Dashboard em `http://127.0.0.1:8000/`.
 curl -X POST -H "Content-Type: application/json" \
   -d '{"question":"o que esta acontecendo?", "history": []}' \
   http://127.0.0.1:8000/chat
+```
+
+## Clima (web scraping)
+
+O backend coleta condicoes externas via [Open-Meteo](https://open-meteo.com/) (API publica, sem chave). O service `services/weather_scraper.py` faz cache em memoria (TTL configuravel), valida os valores e, em falha de rede, devolve o ultimo snapshot marcado como `is_stale`. O dashboard mostra um card de clima e o agente recebe essas condicoes no contexto operacional. Desligue com `WEATHER_ENABLED=0`.
+
+```bash
+curl http://127.0.0.1:8000/weather
 ```
 
 ## Troubleshooting

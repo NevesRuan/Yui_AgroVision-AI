@@ -1,17 +1,23 @@
 """AgroVision AI - rotas FastAPI e orquestracao de services."""
-from __future__ import annotations
-
 import asyncio
 import json
 import logging
+from contextlib import asynccontextmanager
 
-import httpx
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
-from services.config import AGENT_EVENT_LIMIT, DEBUG
+from services.config import (
+    AGENT_EVENT_LIMIT,
+    DEBUG,
+    MAX_REQUEST_BODY_BYTES,
+    WEATHER_ENABLED,
+)
 from services.event_repository import init_db, list_events
 from services.monitoring_agent import (
     AGENT_PROFILE,
@@ -19,6 +25,8 @@ from services.monitoring_agent import (
     build_event_context,
 )
 from services import ollama_client
+from services import weather_scraper
+from services.ollama_client import OllamaUnavailableError
 from services.schemas import ChatRequest, ChatResponse
 from services.video_monitor import VideoMonitor
 
@@ -28,24 +36,74 @@ logging.basicConfig(
 )
 logger = logging.getLogger("agrovision")
 
-app = FastAPI(title="AgroVision AI")
-app.mount("/static", StaticFiles(directory="static"), name="static")
-templates = Jinja2Templates(directory="templates")
-
 monitor = VideoMonitor()
 
 
-@app.on_event("startup")
-async def on_startup() -> None:
+async def _persist_weather_loop():
+    from services.event_repository import save_weather_snapshot
+    while True:
+        try:
+            if WEATHER_ENABLED:
+                snap = await weather_scraper.get_current()
+                if snap is not None and not snap.is_stale:
+                    save_weather_snapshot(snap.to_dict())
+                    logger.debug("Snapshot de clima persistido")
+        except Exception as exc:
+            logger.warning("Falha ao persistir clima: %s", exc)
+        await asyncio.sleep(3600)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     init_db()
     monitor.start()
-    asyncio.create_task(ollama_client.warmup())
+    warmup_task = asyncio.create_task(ollama_client.warmup())
+    app.state.warmup_task = warmup_task
+    weather_task = asyncio.create_task(_persist_weather_loop())
+    app.state.weather_task = weather_task
     logger.info("AgroVision AI pronto")
+    try:
+        yield
+    finally:
+        monitor.stop()
+        for task in (warmup_task, weather_task):
+            if not task.done():
+                task.cancel()
 
 
-@app.on_event("shutdown")
-async def on_shutdown() -> None:
-    monitor.stop()
+app = FastAPI(title="AgroVision AI", lifespan=lifespan)
+app.mount("/static", StaticFiles(directory="static"), name="static")
+templates = Jinja2Templates(directory="templates")
+
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+
+@app.middleware("http")
+async def limit_body_size(request: Request, call_next):
+    # Rejeita corpos grandes pelo Content-Length, antes de ler na memoria. Corta o
+    # DoS de memoria e o bypass do rate limit via corpos invalidos volumosos.
+    content_length = request.headers.get("content-length")
+    if content_length is not None:
+        try:
+            declared = int(content_length)
+        except ValueError:
+            return JSONResponse({"detail": "Content-Length invalido"}, status_code=400)
+        if declared > MAX_REQUEST_BODY_BYTES:
+            return JSONResponse(
+                {"detail": "Corpo da requisicao muito grande"}, status_code=413
+            )
+    return await call_next(request)
+
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "no-referrer")
+    return response
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -71,16 +129,26 @@ async def camera_status() -> JSONResponse:
     return JSONResponse(monitor.get_status())
 
 
+@app.get("/weather")
+async def weather() -> JSONResponse:
+    if not WEATHER_ENABLED:
+        return JSONResponse({"enabled": False}, status_code=200)
+    snap = await weather_scraper.get_current()
+    if snap is None:
+        return JSONResponse({"enabled": True, "available": False}, status_code=503)
+    return JSONResponse({"enabled": True, "available": True, **snap.to_dict()})
+
+
 @app.get("/agent/status")
 async def agent_status() -> JSONResponse:
-    events = list_events(AGENT_EVENT_LIMIT)
+    recent_events = list_events(AGENT_EVENT_LIMIT)
     return JSONResponse(
         {
             "name": AGENT_PROFILE.name,
             "role": AGENT_PROFILE.role,
             "goal": AGENT_PROFILE.goal,
-            "events_in_context": len(events),
-            "context_preview": build_event_context(events),
+            "events_in_context": len(recent_events),
+            "context_preview": build_event_context(recent_events),
         }
     )
 
@@ -118,18 +186,24 @@ def _wants_stream(request: Request) -> bool:
 
 
 @app.post("/chat")
+@limiter.limit("10/minute")
 async def chat(request: Request, payload: ChatRequest):
-    events = list_events(AGENT_EVENT_LIMIT)
-    messages = build_agent_messages(payload.question, payload.history, events)
+    recent_events = list_events(AGENT_EVENT_LIMIT)
+    weather_dict = None
+    if WEATHER_ENABLED:
+        snap = await weather_scraper.get_current()
+        if snap is not None:
+            weather_dict = snap.to_dict()
+    messages = build_agent_messages(payload.question, payload.history, recent_events, weather_dict)
 
     if not _wants_stream(request):
         try:
             answer = await ollama_client.chat(messages)
-        except httpx.HTTPError as exc:
+        except OllamaUnavailableError as exc:
             logger.warning("Falha na chamada ao Ollama: %s", exc)
             raise HTTPException(
                 status_code=503,
-                detail="Ollama indisponivel. Verifique se 'ollama serve' esta rodando.",
+                detail="Servico de IA temporariamente indisponivel",
             ) from exc
         return ChatResponse(answer=answer)
 
@@ -138,7 +212,7 @@ async def chat(request: Request, payload: ChatRequest):
             async for chunk in ollama_client.chat_stream(messages):
                 yield json.dumps({"chunk": chunk}, ensure_ascii=False) + "\n"
             yield json.dumps({"done": True}) + "\n"
-        except httpx.HTTPError as exc:
+        except OllamaUnavailableError as exc:
             logger.warning("Falha no streaming do Ollama: %s", exc)
             yield json.dumps(
                 {"error": "Ollama indisponivel no momento.", "done": True},

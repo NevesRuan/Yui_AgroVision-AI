@@ -159,6 +159,8 @@ venv.bak/
 
 # AgroVision runtime artifacts
 detections.db
+detections.db-wal
+detections.db-shm
 static/captures/*
 !static/captures/.gitkeep
 runs/
@@ -224,3 +226,8 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Docs internos (nao versionados)
+CLAUDE.md
+TASKS.md
+RELATORIO.md
