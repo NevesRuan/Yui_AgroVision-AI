@@ -2,6 +2,12 @@
 
 Sistema de monitoramento operacional que combina visao computacional (YOLOv8) e um LLM local (Ollama) para detectar objetos em video e descrever a situacao em linguagem natural.
 
+## Relatório técnico
+
+A revisão técnica completa do projeto — análise de arquitetura, segurança e as
+melhorias aplicadas ao código gerado por IA — está documentada em
+[`Relatorio_AgroVision_AI.pdf`](Relatorio_AgroVision_AI.pdf).
+
 ## Pre-requisitos
 
 - Python 3.11.x
